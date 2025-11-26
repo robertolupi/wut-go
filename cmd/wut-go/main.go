@@ -13,7 +13,29 @@ import (
 	"wut-go/internal/fileutils"
 )
 
+var (
+	Reset = "\033[0m"
+	Bold  = "\033[1m"
+	Red   = "\033[31m"
+	Green = "\033[32m"
+)
+
+func isTTY() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
 func main() {
+	if !isTTY() {
+		Reset = ""
+		Bold = ""
+		Red = ""
+		Green = ""
+	}
+
 	modelFlag := flag.String("model", "mistralai/magistral-small-2509", "Model Name")
 	baseURLFlag := flag.String("base-url", "http://localhost:1234/v1", "OpenAI-compatible URL")
 	apiKeyFlag := flag.String("api-key", "", "API key")
@@ -24,7 +46,7 @@ func main() {
 
 	files := flag.Args()
 	if len(files) == 0 {
-		fmt.Println("Please specify at least one file")
+		fmt.Println(Red + "Please specify at least one file" + Reset)
 		os.Exit(1)
 	}
 
@@ -44,7 +66,7 @@ func main() {
 		content, cType, err := fileutils.ReadFileContent(filename)
 		if err != nil {
 			// We print the error, which includes "is a directory" or "not a regular file" details
-			fmt.Printf("Skipping %s: %s\n", filename, err)
+			fmt.Printf(Red+"Skipping %s: %s"+Reset+"\n", filename, err)
 			continue
 		}
 
@@ -56,11 +78,11 @@ func main() {
 
 		fileSummary, err := summarizer.Summarize(context.Background(), content, *modelFlag, filename, cType)
 		if err != nil {
-			fmt.Printf("Failed to guess file %s: %s\n", filename, err)
+			fmt.Printf(Red+"Failed to guess file %s: %s"+Reset+"\n", filename, err)
 			continue
 		}
 
-		fmt.Printf("%s: %s\n", filename, fileSummary.Summary)
+		fmt.Printf("%s%s%s: %s\n", Bold, filename, Reset, fileSummary.Summary)
 
 		if *summaryFlag {
 			fileSummaries = append(fileSummaries, *fileSummary)
@@ -68,10 +90,10 @@ func main() {
 	}
 
 	if *summaryFlag && len(fileSummaries) > 0 {
-		fmt.Println("\n=== OVERALL SUMMARY ===")
+		fmt.Println("\n" + Bold + Green + "=== OVERALL SUMMARY ===" + Reset)
 		overallSummary, err := summarizer.SummarizeAll(context.Background(), fileSummaries, *modelFlag)
 		if err != nil {
-			fmt.Printf("Failed to generate overall summary: %s\n", err)
+			fmt.Printf(Red+"Failed to generate overall summary: %s"+Reset+"\n", err)
 		} else {
 			fmt.Println(overallSummary)
 		}
