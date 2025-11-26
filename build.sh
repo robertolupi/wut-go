@@ -1,3 +1,3 @@
 #!/bin/sh
-go build -o wut-go cmd/wut-go/main.go
+go build -o wut cmd/wut-go/main.go
 
