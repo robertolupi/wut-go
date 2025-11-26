@@ -14,11 +14,12 @@ import (
 
 const systemPrompt = "Describe the following file in one sentence"
 
-func guessContent(client openai.Client, content string, model string, filename string) (string, error) {
+func guessContent(client openai.Client, content string, model string, filename string, contentType string) (string, error) {
 	params := openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(systemPrompt),
 			openai.SystemMessage(fmt.Sprintf("The file name is called %s", filename)),
+			openai.SystemMessage(fmt.Sprintf("The output of the /usr/bin/file command is: %s", contentType)),
 			openai.UserMessage(content),
 		},
 		Model: model,
@@ -31,14 +32,27 @@ func guessContent(client openai.Client, content string, model string, filename s
 	return completion.Choices[0].Message.Content, nil
 }
 
-func isTextFile(path string) bool {
+func contentType(path string) (string, error) {
 	// Use the file utility to determine if the file contains text
 	cmd := exec.Command("file", path)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return false
+		return "", err
 	}
-	return strings.Contains(string(output), "text")
+	parts := strings.SplitN(string(output), ":", 2)
+	if len(parts) != 2 {
+		return parts[0], nil
+	}
+	return parts[1], nil
+}
+
+func extractTextContentFromPdf(path string) (string, error) {
+	cmd := exec.Command("pdftotext", path, "-")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
 }
 
 func main() {
@@ -73,21 +87,28 @@ func main() {
 			continue
 		}
 
-		if !isTextFile(filename) {
-			fmt.Printf("File %s is not a text file\n", filename)
-			continue
-		}
-
-		content, err := os.ReadFile(filename)
+		contentType, err := contentType(filename)
 		if err != nil {
-			fmt.Printf("Failed to read file %s: %s\n", filename, err)
+			fmt.Printf("Failed to determine content type of file %s: %s\n", filename, err)
 			continue
 		}
+		var content string
+		if strings.HasPrefix(contentType, "application/pdf") {
+			content, err = extractTextContentFromPdf(filename)
+			if err != nil {
+				fmt.Printf("Failed to extract text from PDF file %s: %s\n", filename, err)
+			}
+		} else if strings.HasPrefix(contentType, "text/") {
+			bytes, err := os.ReadFile(filename)
+			if err != nil {
+				fmt.Printf("Failed to read file %s: %s\n", filename, err)
+			}
+			content = string(bytes)
+		}
 
-		guess, err := guessContent(client, string(content), *modelFlag, filename)
+		guess, err := guessContent(client, string(content), *modelFlag, filename, contentType)
 		if err != nil {
 			fmt.Printf("Failed to guess file %s: %s\n", filename, err)
-			continue
 		}
 
 		fmt.Printf("%s: %s\n", filename, guess)
