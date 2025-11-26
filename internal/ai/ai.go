@@ -41,14 +41,26 @@ func (s *OpenAISummarizer) Summarize(ctx context.Context, content, model, filena
 		truncatedContent = content[:maxChars] + "\n...[TRUNCATED]..."
 	}
 
+	var messages []openai.ChatCompletionMessageParamUnion
+	messages = append(messages, openai.SystemMessage("Describe the following file in one sentence"))
+	messages = append(messages, openai.SystemMessage(fmt.Sprintf("The file name is called %s", filename)))
+	messages = append(messages, openai.SystemMessage(fmt.Sprintf("The output of the /usr/bin/file command is: %s", contentType)))
+
+	if strings.HasPrefix(contentType, "image/") {
+		parts := []openai.ChatCompletionContentPartUnionParam{
+			openai.TextContentPart("Describe this image."),
+			openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
+				URL: fmt.Sprintf("data:%s;base64,%s", contentType, truncatedContent),
+			}),
+		}
+		messages = append(messages, openai.UserMessage(parts))
+	} else {
+		messages = append(messages, openai.UserMessage(truncatedContent))
+	}
+
 	params := openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage("Describe the following file in one sentence"),
-			openai.SystemMessage(fmt.Sprintf("The file name is called %s", filename)),
-			openai.SystemMessage(fmt.Sprintf("The output of the /usr/bin/file command is: %s", contentType)),
-			openai.UserMessage(truncatedContent),
-		},
-		Model: model,
+		Messages: messages,
+		Model:    model,
 	}
 
 	completion, err := s.Client.Chat.Completions.New(ctx, params)

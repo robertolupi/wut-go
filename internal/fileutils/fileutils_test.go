@@ -39,6 +39,8 @@ func TestHelperProcess(t *testing.T) {
 				fmt.Printf("%s: application/x-mach-binary\n", path)
 			} else if strings.Contains(path, "binary") {
 				fmt.Printf("%s: application/octet-stream\n", path)
+			} else if strings.Contains(path, "png") {
+				fmt.Printf("%s: image/png\n", path)
 			} else {
 				fmt.Printf("%s: text/plain\n", path)
 			}

@@ -1,6 +1,7 @@
 package fileutils
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -106,6 +107,12 @@ func ReadFileContent(filename string) (string, string, error) {
 		if err != nil {
 			return "", cType, fmt.Errorf("failed to extract binary info: %w", err)
 		}
+	} else if strings.HasPrefix(cType, "image/") {
+		bytes, err := os.ReadFile(filename)
+		if err != nil {
+			return "", cType, fmt.Errorf("failed to read image file: %w", err)
+		}
+		content = base64.StdEncoding.EncodeToString(bytes)
 	} else if strings.HasPrefix(cType, "text/") || strings.Contains(cType, "text") {
 		bytes, err := os.ReadFile(filename)
 		if err != nil {
