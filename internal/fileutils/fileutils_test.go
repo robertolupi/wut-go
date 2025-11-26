@@ -35,13 +35,33 @@ func TestHelperProcess(t *testing.T) {
 		// Expect args: --mime-type path
 		if len(args) >= 2 && args[1] == "--mime-type" {
 			path := args[len(args)-1]
-			if strings.Contains(path, "binary") {
+			if strings.Contains(path, "mach") {
+				fmt.Printf("%s: application/x-mach-binary\n", path)
+			} else if strings.Contains(path, "binary") {
 				fmt.Printf("%s: application/octet-stream\n", path)
 			} else {
 				fmt.Printf("%s: text/plain\n", path)
 			}
 		} else {
 			fmt.Printf("%s: unknown\n", args[len(args)-1])
+		}
+	case "otool":
+		if len(args) >= 2 && args[1] == "-L" {
+			fmt.Println("libSystem.B.dylib")
+		}
+	case "codesign":
+		fmt.Println("Entitlements Info")
+	case "sh":
+		// Check the command string passed to sh -c
+		if len(args) >= 2 && args[1] == "-c" {
+			cmdStr := args[2]
+			if strings.Contains(cmdStr, "otool -l") {
+				fmt.Println("Load Command Info")
+			} else if strings.Contains(cmdStr, "nm -u") {
+				fmt.Println("External Symbols Info")
+			} else if strings.Contains(cmdStr, "strings") {
+				fmt.Println("Interesting Strings Info")
+			}
 		}
 	case "pdftotext":
 		// Mock 'pdftotext path -'
@@ -106,5 +126,58 @@ func TestReadFileContent_Binary(t *testing.T) {
 	}
 	if content != "" {
 		t.Errorf("Expected empty content for binary file, got %q", content)
+	}
+}
+
+func TestExtractBinaryInfo(t *testing.T) {
+	execCommand = fakeExecCommand
+	defer func() { execCommand = exec.Command }()
+
+	info, err := ExtractBinaryInfo("dummy_mach")
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	expectedSubstrings := []string{
+		"=== FILE INFO ===",
+		"=== SHARED LIBRARIES & FRAMEWORKS ===",
+		"libSystem.B.dylib",
+		"=== ENTITLEMENTS & SIGNING ===",
+		"Entitlements Info",
+		"=== LOAD COMMANDS (Headers) ===",
+		"Load Command Info",
+		"=== EXTERNAL SYMBOLS (Imports) ===",
+		"External Symbols Info",
+		"=== INTERESTING STRINGS ===",
+		"Interesting Strings Info",
+	}
+
+	for _, sub := range expectedSubstrings {
+		if !strings.Contains(info, sub) {
+			t.Errorf("Expected info to contain %q, got:\n%s", sub, info)
+		}
+	}
+}
+
+func TestReadFileContent_MachBinary(t *testing.T) {
+	execCommand = fakeExecCommand
+	defer func() { execCommand = exec.Command }()
+
+	// Create a dummy mach file
+	err := os.WriteFile("test_mach", []byte("MachBinary"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove("test_mach")
+
+	content, cType, err := ReadFileContent("test_mach")
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if cType != "application/x-mach-binary" {
+		t.Errorf("Expected application/x-mach-binary, got %s", cType)
+	}
+	if !strings.Contains(content, "=== FILE INFO ===") {
+		t.Errorf("Expected binary info content, got %q", content)
 	}
 }

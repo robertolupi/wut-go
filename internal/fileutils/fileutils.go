@@ -36,6 +36,46 @@ func ExtractTextFromPDF(path string) (string, error) {
 	return string(output), nil
 }
 
+// ExtractBinaryInfo extracts metadata from a binary file using system tools.
+func ExtractBinaryInfo(path string) (string, error) {
+	var sb strings.Builder
+
+	// File Info
+	sb.WriteString("=== FILE INFO ===\n")
+	out, _ := execCommand("file", path).CombinedOutput()
+	sb.Write(out)
+
+	// Shared Libraries
+	sb.WriteString("\n=== SHARED LIBRARIES & FRAMEWORKS ===\n")
+	out, _ = execCommand("otool", "-L", path).CombinedOutput()
+	sb.Write(out)
+
+	// Entitlements
+	sb.WriteString("\n=== ENTITLEMENTS & SIGNING ===\n")
+	out, _ = execCommand("codesign", "-d", "--entitlements", ":-", path).CombinedOutput()
+	sb.Write(out)
+
+	// Load Commands
+	sb.WriteString("\n=== LOAD COMMANDS (Headers) ===\n")
+	cmdStr := fmt.Sprintf("otool -l %q | grep -A 5 \"LC_VERSION_MIN\\|LC_BUILD_VERSION\\|LC_ENCRYPTION_INFO\"", path)
+	out, _ = execCommand("sh", "-c", cmdStr).CombinedOutput()
+	sb.Write(out)
+
+	// External Symbols
+	sb.WriteString("\n=== EXTERNAL SYMBOLS (Imports) ===\n")
+	cmdStr = fmt.Sprintf("nm -u %q | c++filt | head -n 100", path)
+	out, _ = execCommand("sh", "-c", cmdStr).CombinedOutput()
+	sb.Write(out)
+
+	// Interesting Strings
+	sb.WriteString("\n=== INTERESTING STRINGS ===\n")
+	cmdStr = fmt.Sprintf("strings %q | grep -E \"https?://|/usr/|/System/|/var/\" | head -n 50", path)
+	out, _ = execCommand("sh", "-c", cmdStr).CombinedOutput()
+	sb.Write(out)
+
+	return sb.String(), nil
+}
+
 // ReadFileContent reads the content of a file based on its content type.
 // It handles PDF text extraction automatically.
 func ReadFileContent(filename string) (string, string, error) {
@@ -60,6 +100,11 @@ func ReadFileContent(filename string) (string, string, error) {
 		content, err = ExtractTextFromPDF(filename)
 		if err != nil {
 			return "", cType, fmt.Errorf("failed to extract text from PDF: %w", err)
+		}
+	} else if cType == "application/x-mach-binary" {
+		content, err = ExtractBinaryInfo(filename)
+		if err != nil {
+			return "", cType, fmt.Errorf("failed to extract binary info: %w", err)
 		}
 	} else if strings.HasPrefix(cType, "text/") || strings.Contains(cType, "text") {
 		bytes, err := os.ReadFile(filename)
