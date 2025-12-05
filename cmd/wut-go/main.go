@@ -36,7 +36,7 @@ func main() {
 		Green = ""
 	}
 
-	modelFlag := flag.String("model", "mistralai/magistral-small-2509", "Model Name")
+	modelFlag := flag.String("model", "mistralai/ministral-3-3b", "Model Name")
 	baseURLFlag := flag.String("base-url", "http://localhost:1234/v1", "OpenAI-compatible URL")
 	apiKeyFlag := flag.String("api-key", "", "API key")
 	verboseFlag := flag.Bool("verbose", false, "Verbose output")
